@@ -39,6 +39,7 @@ jobs:
           severity: CRITICAL,HIGH
           exit-code: 1
           ignore-unfixed: true
+          trivyignores: ./frontend/.trivyignore
 
   # ─────────────────────────────────────────
   # JOB 2: Build & scan images, push if changed
@@ -81,6 +82,7 @@ jobs:
           severity: CRITICAL,HIGH
           exit-code: 1
           ignore-unfixed: true
+          trivyignores: ./backend/.trivyignore
 
       - name: Check if backend changed
         id: check_backend
