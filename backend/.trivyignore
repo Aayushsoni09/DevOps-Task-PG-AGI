@@ -2,3 +2,5 @@
 # jaraco.context is vendored inside setuptools - not directly updatable
 # it is a build tool only, not used at runtime by the application
 CVE-2026-23949
+# wheel
+CVE-2026-24049
