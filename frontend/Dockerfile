@@ -1,5 +1,5 @@
 # ---------- BUILD STAGE ----------
-FROM node:18 AS builder
+FROM node:20-alpine AS builder
 
 WORKDIR /app
 
@@ -17,7 +17,7 @@ RUN npm run build
 
 
 # ---------- RUNTIME STAGE ----------
-FROM node:18
+FROM node:20-alpine
 
 WORKDIR /app
 
