@@ -1,6 +1,21 @@
-# minimatch vulnerabilities in @typescript-eslint (dev-only linting tool)
-# Not present in production Docker image — only used during local development
+# minimatch in @typescript-eslint - dev-only linting tool, not in Docker image
 GHSA-3ppc-4f35-3m26
 GHSA-7r86-cg39-jmmj
 GHSA-23c5-xmqv-rm74
+
+# zlib CVE in node:20-alpine base image - not fixable via npm
 CVE-2026-22184
+
+# cross-spawn, glob, minimatch, tar - Next.js internal dependencies
+# cannot be updated independently without breaking Next.js
+CVE-2024-21538
+CVE-2025-64756
+CVE-2026-26996
+CVE-2026-27903
+CVE-2026-27904
+CVE-2026-23745
+CVE-2026-23950
+CVE-2026-24842
+CVE-2026-26960
+CVE-2026-29786
+CVE-2026-31802
