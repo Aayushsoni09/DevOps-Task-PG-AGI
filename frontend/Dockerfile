@@ -23,8 +23,11 @@ WORKDIR /app
 
 # copy only required files from build stage
 COPY --from=builder /app/package*.json ./
+# Install ONLY production dependencies — no dev deps
+RUN npm install --omit=dev
+
 COPY --from=builder /app/.next ./.next
-COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/public ./public
 
 EXPOSE 3000
 
