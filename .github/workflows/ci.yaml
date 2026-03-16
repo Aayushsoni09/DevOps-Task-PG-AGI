@@ -108,6 +108,7 @@ jobs:
       - name: Build frontend image
         run: |
           docker build \
+            --no-cache \
             --build-arg NEXT_PUBLIC_API_URL=${{ secrets.NEXT_PUBLIC_API_URL }} \
             -t ${{ env.FRONTEND_IMAGE }}:${{ steps.set_tag.outputs.tag }} \
             -t ${{ env.FRONTEND_IMAGE }}:latest \
