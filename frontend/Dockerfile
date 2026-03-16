@@ -18,7 +18,7 @@ RUN npm run build
 
 # ---------- RUNTIME STAGE ----------
 FROM node:20-alpine
-
+RUN apk add --no-cache curl
 WORKDIR /app
 
 # copy only required files from build stage
