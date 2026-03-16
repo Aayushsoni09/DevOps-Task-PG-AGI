@@ -2,9 +2,9 @@ name: CI Pipeline
 
 on:
   push:
-    branches: [main, dev]
+    branches: [ main, dev ]
   pull_request:
-    branches: [main]
+    branches: [ main ]
 
 env:
   AWS_REGION: ap-south-1
@@ -16,28 +16,28 @@ jobs:
     name: Trivy Filesystem Scan
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v4
 
-      - name: Run Trivy on source (backend)
-        uses: aquasecurity/trivy-action@master
-        with:
-          scan-type: fs
-          scan-ref: ./backend
-          severity: CRITICAL,HIGH
-          exit-code: 1
-          ignore-unfixed: true
-          trivyignores: backend/.trivyignore
+    - name: Run Trivy on source (backend)
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: fs
+        scan-ref: ./backend
+        severity: CRITICAL,HIGH
+        exit-code: 1
+        ignore-unfixed: true
+        trivyignores: backend/.trivyignore
 
-      - name: Run Trivy on source (frontend)
-        uses: aquasecurity/trivy-action@master
-        with:
-          scan-type: fs
-          scan-ref: ./frontend
-          severity: CRITICAL,HIGH
-          exit-code: 1
-          ignore-unfixed: true
-          trivyignores: frontend/.trivyignore
+    - name: Run Trivy on source (frontend)
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: fs
+        scan-ref: ./frontend
+        severity: CRITICAL,HIGH
+        exit-code: 1
+        ignore-unfixed: true
+        trivyignores: frontend/.trivyignore
 
   build-scan-push:
     name: Build, Scan & Push
@@ -51,66 +51,73 @@ jobs:
       contents: read
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v4
 
-      - name: Set image tag from git SHA
-        id: set_tag
-        run: echo "tag=${GITHUB_SHA::8}" >> $GITHUB_OUTPUT
+    - name: Set image tag from git SHA
+      id: set_tag
+      run: echo "tag=${GITHUB_SHA::8}" >> $GITHUB_OUTPUT
 
-      - name: Configure AWS credentials via OIDC
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_GITHUB_ACTIONS_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
+    - name: Configure AWS credentials via OIDC
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.AWS_GITHUB_ACTIONS_ROLE_ARN }}
+        aws-region: ${{ env.AWS_REGION }}
 
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build backend image
-        run: |
-          docker build \
-            -t ${{ env.ECR_BACKEND }}:${{ steps.set_tag.outputs.tag }} \
-            -t ${{ env.ECR_BACKEND }}:latest \
-            ./backend
+    - name: Build backend image
+      run: |
+        docker build \
+          -t ${{ env.ECR_BACKEND }}:${{ steps.set_tag.outputs.tag }} \
+          -t ${{ env.ECR_BACKEND }}:latest \
+          ./backend
 
-      - name: Trivy scan - backend image
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: ${{ env.ECR_BACKEND }}:${{ steps.set_tag.outputs.tag }}
-          severity: CRITICAL,HIGH
-          exit-code: 1
-          ignore-unfixed: true
-          trivyignores: backend/.trivyignore
+    - name: Trivy scan - backend image
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: ${{ env.ECR_BACKEND }}:${{ steps.set_tag.outputs.tag }}
+        severity: CRITICAL,HIGH
+        exit-code: 1
+        ignore-unfixed: true
+        trivyignores: backend/.trivyignore
 
-      - name: Push backend image to ECR
-        run: |
-          docker push ${{ env.ECR_BACKEND }}:${{ steps.set_tag.outputs.tag }}
-          docker push ${{ env.ECR_BACKEND }}:latest
+    - name: Push backend image to ECR
+      run: |
+        docker push ${{ env.ECR_BACKEND }}:${{ steps.set_tag.outputs.tag }}
+        docker push ${{ env.ECR_BACKEND }}:latest
 
-      - name: Build frontend image
-        run: |
-          docker build \
-            --no-cache \
-            --build-arg NEXT_PUBLIC_API_URL=${{ secrets.NEXT_PUBLIC_API_URL }} \
-            -t ${{ env.ECR_FRONTEND }}:${{ steps.set_tag.outputs.tag }} \
-            -t ${{ env.ECR_FRONTEND }}:latest \
-            ./frontend
+    - name: Build frontend image for AWS
+      run: |
+        docker build \
+          --no-cache \
+          --build-arg NEXT_PUBLIC_API_URL=${{ secrets.NEXT_PUBLIC_API_URL }} \
+          -t ${{ env.ECR_FRONTEND }}:${{ steps.set_tag.outputs.tag }} \
+          -t ${{ env.ECR_FRONTEND }}:latest \
+          ./frontend
+    - name: Build frontend image for GCP
+      run: |
+        docker build \
+          --no-cache \
+          --build-arg NEXT_PUBLIC_API_URL=${{ secrets.GCP_NEXT_PUBLIC_API_URL }} \
+          -t asia-south1-docker.pkg.dev/pgagi-task/pgagi-images/pgagi-frontend:${{ steps.set_tag.outputs.tag }} \
+          -t asia-south1-docker.pkg.dev/pgagi-task/pgagi-images/pgagi-frontend:latest \
+          ./frontend
+    - name: Trivy scan - frontend image
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: ${{ env.ECR_FRONTEND }}:${{ steps.set_tag.outputs.tag }}
+        severity: CRITICAL,HIGH
+        exit-code: 1
+        ignore-unfixed: true
+        trivyignores: frontend/.trivyignore
 
-      - name: Trivy scan - frontend image
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: ${{ env.ECR_FRONTEND }}:${{ steps.set_tag.outputs.tag }}
-          severity: CRITICAL,HIGH
-          exit-code: 1
-          ignore-unfixed: true
-          trivyignores: frontend/.trivyignore
-
-      - name: Push frontend image to ECR
-        run: |
-          docker push ${{ env.ECR_FRONTEND }}:${{ steps.set_tag.outputs.tag }}
-          docker push ${{ env.ECR_FRONTEND }}:latest
+    - name: Push frontend image to ECR
+      run: |
+        docker push ${{ env.ECR_FRONTEND }}:${{ steps.set_tag.outputs.tag }}
+        docker push ${{ env.ECR_FRONTEND }}:latest
 
   deploy-dev:
     name: Deploy to ECS Dev
@@ -123,39 +130,39 @@ jobs:
       contents: read
 
     steps:
-      - name: Configure AWS credentials via OIDC
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_GITHUB_ACTIONS_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
+    - name: Configure AWS credentials via OIDC
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.AWS_GITHUB_ACTIONS_ROLE_ARN }}
+        aws-region: ${{ env.AWS_REGION }}
 
-      - name: Update and deploy backend to dev
-        run: |
-          TAG=${{ needs.build-scan-push.outputs.image_tag }}
-          BACKEND_TD=$(aws ecs describe-task-definition --task-definition pgagi-dev-backend --region ${{ env.AWS_REGION }} --query 'taskDefinition' --output json)
-          NEW_BACKEND_TD=$(echo $BACKEND_TD | python3 -c "import json,sys; td=json.load(sys.stdin); td['containerDefinitions'][0]['image']='${{ env.ECR_BACKEND }}:$TAG'; [td.pop(k,None) for k in ['taskDefinitionArn','revision','status','requiresAttributes','compatibilities','registeredAt','registeredBy']]; print(json.dumps(td))")
-          aws ecs register-task-definition --region ${{ env.AWS_REGION }} --cli-input-json "$NEW_BACKEND_TD"
-          aws ecs update-service --cluster pgagi-dev-cluster --service pgagi-dev-backend --task-definition pgagi-dev-backend --force-new-deployment --region ${{ env.AWS_REGION }}
+    - name: Update and deploy backend to dev
+      run: |
+        TAG=${{ needs.build-scan-push.outputs.image_tag }}
+        BACKEND_TD=$(aws ecs describe-task-definition --task-definition pgagi-dev-backend --region ${{ env.AWS_REGION }} --query 'taskDefinition' --output json)
+        NEW_BACKEND_TD=$(echo $BACKEND_TD | python3 -c "import json,sys; td=json.load(sys.stdin); td['containerDefinitions'][0]['image']='${{ env.ECR_BACKEND }}:$TAG'; [td.pop(k,None) for k in ['taskDefinitionArn','revision','status','requiresAttributes','compatibilities','registeredAt','registeredBy']]; print(json.dumps(td))")
+        aws ecs register-task-definition --region ${{ env.AWS_REGION }} --cli-input-json "$NEW_BACKEND_TD"
+        aws ecs update-service --cluster pgagi-dev-cluster --service pgagi-dev-backend --task-definition pgagi-dev-backend --force-new-deployment --region ${{ env.AWS_REGION }}
 
-      - name: Update and deploy frontend to dev
-        run: |
-          TAG=${{ needs.build-scan-push.outputs.image_tag }}
-          FRONTEND_TD=$(aws ecs describe-task-definition --task-definition pgagi-dev-frontend --region ${{ env.AWS_REGION }} --query 'taskDefinition' --output json)
-          NEW_FRONTEND_TD=$(echo $FRONTEND_TD | python3 -c "import json,sys; td=json.load(sys.stdin); td['containerDefinitions'][0]['image']='${{ env.ECR_FRONTEND }}:$TAG'; [td.pop(k,None) for k in ['taskDefinitionArn','revision','status','requiresAttributes','compatibilities','registeredAt','registeredBy']]; print(json.dumps(td))")
-          aws ecs register-task-definition --region ${{ env.AWS_REGION }} --cli-input-json "$NEW_FRONTEND_TD"
-          aws ecs update-service --cluster pgagi-dev-cluster --service pgagi-dev-frontend --task-definition pgagi-dev-frontend --force-new-deployment --region ${{ env.AWS_REGION }}
+    - name: Update and deploy frontend to dev
+      run: |
+        TAG=${{ needs.build-scan-push.outputs.image_tag }}
+        FRONTEND_TD=$(aws ecs describe-task-definition --task-definition pgagi-dev-frontend --region ${{ env.AWS_REGION }} --query 'taskDefinition' --output json)
+        NEW_FRONTEND_TD=$(echo $FRONTEND_TD | python3 -c "import json,sys; td=json.load(sys.stdin); td['containerDefinitions'][0]['image']='${{ env.ECR_FRONTEND }}:$TAG'; [td.pop(k,None) for k in ['taskDefinitionArn','revision','status','requiresAttributes','compatibilities','registeredAt','registeredBy']]; print(json.dumps(td))")
+        aws ecs register-task-definition --region ${{ env.AWS_REGION }} --cli-input-json "$NEW_FRONTEND_TD"
+        aws ecs update-service --cluster pgagi-dev-cluster --service pgagi-dev-frontend --task-definition pgagi-dev-frontend --force-new-deployment --region ${{ env.AWS_REGION }}
 
-      - name: Wait for dev to stabilize
-        run: |
-          aws ecs wait services-stable \
-            --cluster pgagi-dev-cluster \
-            --services pgagi-dev-backend pgagi-dev-frontend \
-            --region ${{ env.AWS_REGION }}
+    - name: Wait for dev to stabilize
+      run: |
+        aws ecs wait services-stable \
+          --cluster pgagi-dev-cluster \
+          --services pgagi-dev-backend pgagi-dev-frontend \
+          --region ${{ env.AWS_REGION }}
 
   deploy-staging:
     name: Deploy to ECS Staging
     runs-on: ubuntu-latest
-    needs: [build-scan-push, deploy-dev]
+    needs: [ build-scan-push, deploy-dev ]
     if: github.ref == 'refs/heads/main'
     environment: staging
 
@@ -164,39 +171,39 @@ jobs:
       contents: read
 
     steps:
-      - name: Configure AWS credentials via OIDC
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_GITHUB_ACTIONS_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
+    - name: Configure AWS credentials via OIDC
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.AWS_GITHUB_ACTIONS_ROLE_ARN }}
+        aws-region: ${{ env.AWS_REGION }}
 
-      - name: Update and deploy backend to staging
-        run: |
-          TAG=${{ needs.build-scan-push.outputs.image_tag }}
-          BACKEND_TD=$(aws ecs describe-task-definition --task-definition pgagi-staging-backend --region ${{ env.AWS_REGION }} --query 'taskDefinition' --output json)
-          NEW_BACKEND_TD=$(echo $BACKEND_TD | python3 -c "import json,sys; td=json.load(sys.stdin); td['containerDefinitions'][0]['image']='${{ env.ECR_BACKEND }}:$TAG'; [td.pop(k,None) for k in ['taskDefinitionArn','revision','status','requiresAttributes','compatibilities','registeredAt','registeredBy']]; print(json.dumps(td))")
-          aws ecs register-task-definition --region ${{ env.AWS_REGION }} --cli-input-json "$NEW_BACKEND_TD"
-          aws ecs update-service --cluster pgagi-staging-cluster --service pgagi-staging-backend --task-definition pgagi-staging-backend --force-new-deployment --region ${{ env.AWS_REGION }}
+    - name: Update and deploy backend to staging
+      run: |
+        TAG=${{ needs.build-scan-push.outputs.image_tag }}
+        BACKEND_TD=$(aws ecs describe-task-definition --task-definition pgagi-staging-backend --region ${{ env.AWS_REGION }} --query 'taskDefinition' --output json)
+        NEW_BACKEND_TD=$(echo $BACKEND_TD | python3 -c "import json,sys; td=json.load(sys.stdin); td['containerDefinitions'][0]['image']='${{ env.ECR_BACKEND }}:$TAG'; [td.pop(k,None) for k in ['taskDefinitionArn','revision','status','requiresAttributes','compatibilities','registeredAt','registeredBy']]; print(json.dumps(td))")
+        aws ecs register-task-definition --region ${{ env.AWS_REGION }} --cli-input-json "$NEW_BACKEND_TD"
+        aws ecs update-service --cluster pgagi-staging-cluster --service pgagi-staging-backend --task-definition pgagi-staging-backend --force-new-deployment --region ${{ env.AWS_REGION }}
 
-      - name: Update and deploy frontend to staging
-        run: |
-          TAG=${{ needs.build-scan-push.outputs.image_tag }}
-          FRONTEND_TD=$(aws ecs describe-task-definition --task-definition pgagi-staging-frontend --region ${{ env.AWS_REGION }} --query 'taskDefinition' --output json)
-          NEW_FRONTEND_TD=$(echo $FRONTEND_TD | python3 -c "import json,sys; td=json.load(sys.stdin); td['containerDefinitions'][0]['image']='${{ env.ECR_FRONTEND }}:$TAG'; [td.pop(k,None) for k in ['taskDefinitionArn','revision','status','requiresAttributes','compatibilities','registeredAt','registeredBy']]; print(json.dumps(td))")
-          aws ecs register-task-definition --region ${{ env.AWS_REGION }} --cli-input-json "$NEW_FRONTEND_TD"
-          aws ecs update-service --cluster pgagi-staging-cluster --service pgagi-staging-frontend --task-definition pgagi-staging-frontend --force-new-deployment --region ${{ env.AWS_REGION }}
+    - name: Update and deploy frontend to staging
+      run: |
+        TAG=${{ needs.build-scan-push.outputs.image_tag }}
+        FRONTEND_TD=$(aws ecs describe-task-definition --task-definition pgagi-staging-frontend --region ${{ env.AWS_REGION }} --query 'taskDefinition' --output json)
+        NEW_FRONTEND_TD=$(echo $FRONTEND_TD | python3 -c "import json,sys; td=json.load(sys.stdin); td['containerDefinitions'][0]['image']='${{ env.ECR_FRONTEND }}:$TAG'; [td.pop(k,None) for k in ['taskDefinitionArn','revision','status','requiresAttributes','compatibilities','registeredAt','registeredBy']]; print(json.dumps(td))")
+        aws ecs register-task-definition --region ${{ env.AWS_REGION }} --cli-input-json "$NEW_FRONTEND_TD"
+        aws ecs update-service --cluster pgagi-staging-cluster --service pgagi-staging-frontend --task-definition pgagi-staging-frontend --force-new-deployment --region ${{ env.AWS_REGION }}
 
-      - name: Wait for staging to stabilize
-        run: |
-          aws ecs wait services-stable \
-            --cluster pgagi-staging-cluster \
-            --services pgagi-staging-backend pgagi-staging-frontend \
-            --region ${{ env.AWS_REGION }}
+    - name: Wait for staging to stabilize
+      run: |
+        aws ecs wait services-stable \
+          --cluster pgagi-staging-cluster \
+          --services pgagi-staging-backend pgagi-staging-frontend \
+          --region ${{ env.AWS_REGION }}
 
   deploy-prod:
     name: Deploy to ECS Prod
     runs-on: ubuntu-latest
-    needs: [build-scan-push, deploy-staging]
+    needs: [ build-scan-push, deploy-staging ]
     if: github.ref == 'refs/heads/main'
     environment: prod
 
@@ -205,31 +212,54 @@ jobs:
       contents: read
 
     steps:
-      - name: Configure AWS credentials via OIDC
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_GITHUB_ACTIONS_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
+    - name: Configure AWS credentials via OIDC
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.AWS_GITHUB_ACTIONS_ROLE_ARN }}
+        aws-region: ${{ env.AWS_REGION }}
 
-      - name: Update and deploy backend to prod
-        run: |
-          TAG=${{ needs.build-scan-push.outputs.image_tag }}
-          BACKEND_TD=$(aws ecs describe-task-definition --task-definition pgagi-prod-backend --region ${{ env.AWS_REGION }} --query 'taskDefinition' --output json)
-          NEW_BACKEND_TD=$(echo $BACKEND_TD | python3 -c "import json,sys; td=json.load(sys.stdin); td['containerDefinitions'][0]['image']='${{ env.ECR_BACKEND }}:$TAG'; [td.pop(k,None) for k in ['taskDefinitionArn','revision','status','requiresAttributes','compatibilities','registeredAt','registeredBy']]; print(json.dumps(td))")
-          aws ecs register-task-definition --region ${{ env.AWS_REGION }} --cli-input-json "$NEW_BACKEND_TD"
-          aws ecs update-service --cluster pgagi-prod-cluster --service pgagi-prod-backend --task-definition pgagi-prod-backend --force-new-deployment --region ${{ env.AWS_REGION }}
+    - name: Update and deploy backend to prod
+      run: |
+        TAG=${{ needs.build-scan-push.outputs.image_tag }}
+        BACKEND_TD=$(aws ecs describe-task-definition --task-definition pgagi-prod-backend --region ${{ env.AWS_REGION }} --query 'taskDefinition' --output json)
+        NEW_BACKEND_TD=$(echo $BACKEND_TD | python3 -c "import json,sys; td=json.load(sys.stdin); td['containerDefinitions'][0]['image']='${{ env.ECR_BACKEND }}:$TAG'; [td.pop(k,None) for k in ['taskDefinitionArn','revision','status','requiresAttributes','compatibilities','registeredAt','registeredBy']]; print(json.dumps(td))")
+        aws ecs register-task-definition --region ${{ env.AWS_REGION }} --cli-input-json "$NEW_BACKEND_TD"
+        aws ecs update-service --cluster pgagi-prod-cluster --service pgagi-prod-backend --task-definition pgagi-prod-backend --force-new-deployment --region ${{ env.AWS_REGION }}
 
-      - name: Update and deploy frontend to prod
-        run: |
-          TAG=${{ needs.build-scan-push.outputs.image_tag }}
-          FRONTEND_TD=$(aws ecs describe-task-definition --task-definition pgagi-prod-frontend --region ${{ env.AWS_REGION }} --query 'taskDefinition' --output json)
-          NEW_FRONTEND_TD=$(echo $FRONTEND_TD | python3 -c "import json,sys; td=json.load(sys.stdin); td['containerDefinitions'][0]['image']='${{ env.ECR_FRONTEND }}:$TAG'; [td.pop(k,None) for k in ['taskDefinitionArn','revision','status','requiresAttributes','compatibilities','registeredAt','registeredBy']]; print(json.dumps(td))")
-          aws ecs register-task-definition --region ${{ env.AWS_REGION }} --cli-input-json "$NEW_FRONTEND_TD"
-          aws ecs update-service --cluster pgagi-prod-cluster --service pgagi-prod-frontend --task-definition pgagi-prod-frontend --force-new-deployment --region ${{ env.AWS_REGION }}
+    - name: Update and deploy frontend to prod
+      run: |
+        TAG=${{ needs.build-scan-push.outputs.image_tag }}
+        FRONTEND_TD=$(aws ecs describe-task-definition --task-definition pgagi-prod-frontend --region ${{ env.AWS_REGION }} --query 'taskDefinition' --output json)
+        NEW_FRONTEND_TD=$(echo $FRONTEND_TD | python3 -c "import json,sys; td=json.load(sys.stdin); td['containerDefinitions'][0]['image']='${{ env.ECR_FRONTEND }}:$TAG'; [td.pop(k,None) for k in ['taskDefinitionArn','revision','status','requiresAttributes','compatibilities','registeredAt','registeredBy']]; print(json.dumps(td))")
+        aws ecs register-task-definition --region ${{ env.AWS_REGION }} --cli-input-json "$NEW_FRONTEND_TD"
+        aws ecs update-service --cluster pgagi-prod-cluster --service pgagi-prod-frontend --task-definition pgagi-prod-frontend --force-new-deployment --region ${{ env.AWS_REGION }}
 
-      - name: Wait for prod to stabilize
-        run: |
-          aws ecs wait services-stable \
-            --cluster pgagi-prod-cluster \
-            --services pgagi-prod-backend pgagi-prod-frontend \
-            --region ${{ env.AWS_REGION }}
+    - name: Wait for prod to stabilize
+      run: |
+        aws ecs wait services-stable \
+          --cluster pgagi-prod-cluster \
+          --services pgagi-prod-backend pgagi-prod-frontend \
+          --region ${{ env.AWS_REGION }}
+
+    - name: Authenticate to Google Cloud via OIDC
+      uses: google-github-actions/auth@v2
+      with:
+        workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+        service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+    - name: Configure Docker for Artifact Registry
+      run: gcloud auth configure-docker asia-south1-docker.pkg.dev --quiet
+
+    - name: Push backend to Artifact Registry
+      run: |
+        docker tag ${{ env.ECR_BACKEND }}:${{ steps.set_tag.outputs.tag }} asia-south1-docker.pkg.dev/pgagi-task/pgagi-images/pgagi-backend:${{ steps.set_tag.outputs.tag }}
+        docker tag ${{ env.ECR_BACKEND }}:${{ steps.set_tag.outputs.tag }} asia-south1-docker.pkg.dev/pgagi-task/pgagi-images/pgagi-backend:latest
+        docker push asia-south1-docker.pkg.dev/pgagi-task/pgagi-images/pgagi-backend:${{ steps.set_tag.outputs.tag }}
+        docker push asia-south1-docker.pkg.dev/pgagi-task/pgagi-images/pgagi-backend:latest
+
+    - name: Push frontend to Artifact Registry
+      run: |
+        docker tag ${{ env.ECR_FRONTEND }}:${{ steps.set_tag.outputs.tag }} asia-south1-docker.pkg.dev/pgagi-task/pgagi-images/pgagi-frontend:${{ steps.set_tag.outputs.tag }}
+        docker tag ${{ env.ECR_FRONTEND }}:${{ steps.set_tag.outputs.tag }} asia-south1-docker.pkg.dev/pgagi-task/pgagi-images/pgagi-frontend:latest
+        docker push asia-south1-docker.pkg.dev/pgagi-task/pgagi-images/pgagi-frontend:${{ steps.set_tag.outputs.tag }}
+        docker push asia-south1-docker.pkg.dev/pgagi-task/pgagi-images/pgagi-frontend:latest
