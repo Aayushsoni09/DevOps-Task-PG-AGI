@@ -105,6 +105,14 @@ jobs:
           docker push ${{ env.BACKEND_IMAGE }}:latest
 
       # ── FRONTEND ─────────────────────────
+      # FOR DEBUGGING
+      - name: Debug NEXT_PUBLIC_API_URL length
+        run: |
+          echo "URL length: ${#NEXT_PUBLIC_API_URL}"
+          echo "URL first 10 chars: ${NEXT_PUBLIC_API_URL:0:10}"
+        env:
+          NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL }}
+
       - name: Build frontend image
         run: |
           docker build \
